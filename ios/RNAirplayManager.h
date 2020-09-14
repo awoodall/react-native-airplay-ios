@@ -4,7 +4,6 @@
 #import <React/RCTViewManager.h>
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
 #import <MediaPlayer/MediaPlayer.h>
 
 @class RNAirView;
