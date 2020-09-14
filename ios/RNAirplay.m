@@ -38,7 +38,9 @@ RCT_EXPORT_METHOD(disconnect)
 
 RCT_EXPORT_METHOD(showMenu)
 {
-    AVRoutePickerView *routePickerView = [[AVRoutePickerView alloc] init];
+    CGRect frame = CGRectMake(-100, -100, 0, 0);
+    
+    AVRoutePickerView *routePickerView = [[AVRoutePickerView alloc] initWithFrame: frame];
     [routePickerView setHidden:YES];
     if (@available(iOS 13.0, *)) {
         [routePickerView setPrioritizesVideoDevices:YES];
