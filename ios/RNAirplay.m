@@ -1,15 +1,14 @@
 #import "RNAirplay.h"
 #import "RNAirplayManager.h"
 #import <AVFoundation/AVFoundation.h>
+#import <AVKit/AVKit.h>
 #import <AudioToolbox/AudioToolbox.h>
-#import <MediaPlayer/MediaPlayer.h>
-#import <AVKit/AVRoutePickerView.h>
+
 
 @implementation RNAirplay
 @synthesize bridge = _bridge;
 
-- (dispatch_queue_t)methodQueue
-{
+- (dispatch_queue_t)methodQueue {
     return dispatch_get_main_queue();
 }
 
@@ -17,92 +16,76 @@ RCT_EXPORT_MODULE();
 
 RCT_EXPORT_METHOD(startScan)
 {
-    printf("init Airplay");
-    AVAudioSessionRouteDescription* currentRoute = [[AVAudioSession sharedInstance] currentRoute];
-    BOOL isAvailable = NO;
-    NSUInteger routeNum = [[currentRoute outputs] count];
-    if(routeNum > 0) {
-        isAvailable = YES;
-        
-        [[NSNotificationCenter defaultCenter]
-         addObserver:self
-         selector: @selector(airplayChanged:)
-         name: AVAudioSessionRouteChangeNotification
-         object: nil];
-    }
-    [self sendEventWithName:@"airplayAvailable" body:@{@"available": @(isAvailable)}];
-    [ self sendAirplayConnectedStatus];
-}
-RCT_EXPORT_METHOD(showMenu) {
-    CGRect frame = CGRectMake(-100, -100, 0, 0);
+    // Add observer which will call "deviceChanged" method when audio outpout changes
+    // e.g. headphones connect / disconnect
+    [[NSNotificationCenter defaultCenter]
+    addObserver:self
+    selector: @selector(deviceChanged:)
+    name:AVAudioSessionRouteChangeNotification
+    object:[AVAudioSession sharedInstance]];
 
-    AVRoutePickerView *pickerView = [[AVRoutePickerView alloc] initWithFrame:frame];
-
-    UIWindow *window = [[UIApplication sharedApplication] keyWindow];
-    UIView *topView = window.rootViewController.view;
-
-    for (UIButton *button in pickerView.subviews)
-    {
-        if ([button isKindOfClass:[UIButton class]])
-        {
-            [button sendActionsForControlEvents:UIControlEventTouchUpInside];
-        }
-    }
-    [topView addSubview:pickerView];
-}
-
-RCT_EXPORT_METHOD(getAirplayState:(RCTResponseSenderBlock)callback)
-{
-    AVAudioSessionRouteDescription* currentRoute = [[AVAudioSession sharedInstance] currentRoute];
-    BOOL isAirPlayPlaying = NO;
-    BOOL isMirroring = NO;
-    for (AVAudioSessionPortDescription* output in currentRoute.outputs) {
-      if([output.portType isEqualToString:AVAudioSessionPortAirPlay]) {
-          isAirPlayPlaying = YES;
-          break;
-      }
-    }
-    if (isAirPlayPlaying) {
-        if ([[UIScreen screens] count] < 2) {
-             //streaming
-             isMirroring = NO;
-         } else {
-             //mirroring
-             isMirroring = YES;
-         }
-    }
-    callback(@[ @{ @"connected" : @(isAirPlayPlaying), @"mirroring" : @(isMirroring) } ]);
+    // Also call sendEventAboutConnectedDevice method immediately to send currently connected device
+    // at the time of startScan
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self sendEventAboutConnectedDevice];
+    });
 }
 
 RCT_EXPORT_METHOD(disconnect)
 {
-    printf("disconnect Airplay");
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    [self sendEventWithName:@"airplayAvailable" body:@{@"available": @(NO) }];
 }
 
-- (void)airplayChanged:(NSNotification *)sender
+RCT_EXPORT_METHOD(showMenu)
 {
-     [self sendAirplayConnectedStatus];
-}
-
-- (void)sendAirplayConnectedStatus {
-    AVAudioSessionRouteDescription* currentRoute = [[AVAudioSession sharedInstance] currentRoute];
+    AVRoutePickerView *routePickerView = [[AVRoutePickerView alloc] init];
+    [routePickerView setHidden:YES];
+    if (@available(iOS 13.0, *)) {
+        [routePickerView setPrioritizesVideoDevices:YES];
+    }
+    UIWindow *window = [[UIApplication sharedApplication] keyWindow];
+    [window addSubview:routePickerView];
     
-    BOOL isAirPlayPlaying = NO;
-    for (AVAudioSessionPortDescription* output in currentRoute.outputs) {
-        if([output.portType isEqualToString:AVAudioSessionPortAirPlay]) {
-            isAirPlayPlaying = YES;
-            break;
+    for (UIView *subview in routePickerView.subviews) {
+        if ([subview isKindOfClass:[UIButton class]]) {
+            [(UIButton*)subview sendActionsForControlEvents:UIControlEventTouchUpInside];
         }
     }
+}
 
-    [self sendEventWithName:@"airplayConnected" body:@{@"connected": @(isAirPlayPlaying)}];
+
+- (void)deviceChanged:(NSNotification *)sender {
+    // Get current audio output
+    [self sendEventAboutConnectedDevice];
+}
+
+// Gets current devices and sends an event to React Native with information about it
+- (void) sendEventAboutConnectedDevice;
+{
+    AVAudioSessionRouteDescription *currentRoute = [[AVAudioSession sharedInstance] currentRoute];
+    NSString *deviceName;
+    NSString *portType;
+    NSMutableArray *devices = [NSMutableArray array];
+    for (AVAudioSessionPortDescription * output in currentRoute.outputs) {
+        deviceName = output.portName;
+        portType = output.portType;
+        if ([portType isEqualToString:AVAudioSessionPortAirPlay]) {
+            NSDictionary *device = @{ @"deviceName" : deviceName, @"portType" : portType};
+            [devices addObject: device];
+        }
+    }
+    if ([devices count] > 0) {
+        [self sendEventWithName:@"deviceConnected" body:@{@"devices": devices}];
+    }
 }
 
 - (NSArray<NSString *> *)supportedEvents {
-    return @[@"airplayAvailable", @"airplayConnected"];
+    return @[@"deviceConnected"];
 }
 
++ (BOOL)requiresMainQueueSetup
+{
+    return YES;
+}
 
 @end
