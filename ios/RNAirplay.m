@@ -38,21 +38,24 @@ RCT_EXPORT_METHOD(disconnect)
 
 RCT_EXPORT_METHOD(showMenu)
 {
-    CGRect frame = CGRectMake(-100, -100, 0, 0);
-    
-    AVRoutePickerView *routePickerView = [[AVRoutePickerView alloc] initWithFrame: frame];
-    [routePickerView setHidden:YES];
+     CGRect frame = CGRectMake(-100, -100, 0, 0);
+
+    AVRoutePickerView *pickerView = [[AVRoutePickerView alloc] initWithFrame:frame];
+    [pickerView setHidden:YES];
     if (@available(iOS 13.0, *)) {
-        [routePickerView setPrioritizesVideoDevices:YES];
+        [pickerView setPrioritizesVideoDevices:YES];
     }
     UIWindow *window = [[UIApplication sharedApplication] keyWindow];
-    [window addSubview:routePickerView];
+    UIView *topView = window.rootViewController.view;
     
-    for (UIView *subview in routePickerView.subviews) {
-        if ([subview isKindOfClass:[UIButton class]]) {
-            [(UIButton*)subview sendActionsForControlEvents:UIControlEventTouchUpInside];
+    for (UIButton *button in pickerView.subviews)
+    {
+        if ([button isKindOfClass:[UIButton class]])
+        {
+            [button sendActionsForControlEvents:UIControlEventTouchUpInside];
         }
     }
+    [topView addSubview:pickerView];
 }
 
 
